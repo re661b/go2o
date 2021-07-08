@@ -1,0 +1,277 @@
+/**
+ * Copyright 2015 @ to2.net.
+ * name : goods_query.go
+ * author : jarryliu
+ * date : 2016-04-23 12:37
+ * description :
+ * history :
+ */
+package query
+
+import (
+	"bytes"
+	"fmt"
+	"github.com/ixre/gof/db"
+	"github.com/ixre/gof/db/orm"
+	"go2o/core/domain/interface/domain/enum"
+	"go2o/core/domain/interface/item"
+	"go2o/core/domain/interface/valueobject"
+	"go2o/core/infrastructure/format"
+	"strings"
+)
+
+type ItemQuery struct {
+	db.Connector
+	o orm.Orm
+}
+
+func NewItemQuery(o orm.Orm) *ItemQuery {
+	return &ItemQuery{
+		Connector: o.Connector(),
+		o:         o,
+	}
+}
+
+//根据关键词搜索上架的商品
+func (i ItemQuery) GetPagedOnShelvesItem(catId int32,
+	start, end int32, where, orderBy string) (int32, []*item.GoodsItem) {
+	var sql string
+	var total int32
+
+	if len(orderBy) != 0 {
+		orderBy += ","
+	}
+
+	i.Connector.ExecScalar(fmt.Sprintf(`SELECT COUNT(0) FROM item_info
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE item_info.cat_id= $1 AND item_info.review_state= $2
+		 AND item_info.shelve_state= $3 %s`, where), &total,
+		catId, enum.ReviewPass, item.ShelvesOn)
+	var list []*item.GoodsItem
+	if total > 0 {
+		sql = fmt.Sprintf(`SELECT * FROM item_info
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE item_info.cat_id= $1 AND item_info.review_state= $2
+		 AND item_info.shelve_state= $3 %s
+		 ORDER BY %s item_info.update_time DESC LIMIT $5 OFFSET $4`,
+			where, orderBy)
+		i.o.SelectByQuery(&list, sql,
+			catId, enum.ReviewPass, item.ShelvesOn, start, end-start)
+	}
+	return total, list
+}
+
+//根据关键词搜索上架的商品
+func (i ItemQuery) GetPagedOnShelvesItemForWholesale(catId int32,
+	start, end int32, where, orderBy string) (int32, []*item.GoodsItem) {
+	var sql string
+	var total int32
+
+	if len(orderBy) != 0 {
+		orderBy += ","
+	}
+
+	i.Connector.ExecScalar(fmt.Sprintf(`SELECT COUNT(0) FROM ws_item
+         INNER JOIN item_info ON item_info.id=ws_item.item_id
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE item_info.cat_id= $1 AND ws_item.review_state= $2
+		 AND ws_item.shelve_state= $3 %s`, where), &total,
+		catId, enum.ReviewPass, item.ShelvesOn)
+	var list []*item.GoodsItem
+	if total > 0 {
+		sql = fmt.Sprintf(`SELECT * FROM  ws_item
+         INNER JOIN item_info ON item_info.id=ws_item.item_id
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE item_info.cat_id= $1 AND ws_item.review_state= $2
+		 AND ws_item.shelve_state= $3 %s
+		 ORDER BY %s item_info.update_time DESC LIMIT $5 OFFSET $4`,
+			where, orderBy)
+		i.o.SelectByQuery(&list, sql,
+			catId, enum.ReviewPass, item.ShelvesOn, start, end-start)
+	}
+	return total, list
+}
+
+//根据关键词搜索上架的商品
+func (i ItemQuery) SearchOnShelvesItem(word string, start, end int32,
+	where, orderBy string) (int32, []*item.GoodsItem) {
+	var sql string
+	var total int32
+
+	if len(orderBy) != 0 {
+		orderBy += ","
+	}
+
+	buf := bytes.NewBuffer(nil)
+	if word != "" {
+		buf.WriteString(" AND (item_info.title LIKE '%")
+		buf.WriteString(word)
+		buf.WriteString("%' OR item_info.short_title LIKE '%")
+		buf.WriteString(word)
+		buf.WriteString("%')")
+	}
+	buf.WriteString(where)
+	where = buf.String()
+
+	i.Connector.ExecScalar(fmt.Sprintf(`SELECT COUNT(0) FROM item_info
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE  item_info.review_state= $1
+		 AND item_info.shelve_state= $2 %s`, where), &total,
+		enum.ReviewPass, item.ShelvesOn)
+	var list []*item.GoodsItem
+	if total > 0 {
+		sql = fmt.Sprintf(`SELECT * FROM item_info
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE item_info.review_state= $1
+		 AND item_info.shelve_state= $2 %s
+		 ORDER BY %s item_info.update_time DESC LIMIT $4 OFFSET $3`,
+			where, orderBy)
+		i.o.SelectByQuery(&list, sql,
+			enum.ReviewPass, item.ShelvesOn, start, end-start)
+	}
+	return total, list
+}
+
+//根据关键词搜索上架的商品
+func (i ItemQuery) SearchOnShelvesItemForWholesale(word string, start, end int32,
+	where, orderBy string) (int32, []*item.GoodsItem) {
+	var sql string
+	var total int32
+
+	if len(orderBy) != 0 {
+		orderBy += ","
+	}
+
+	buf := bytes.NewBuffer(nil)
+	if word != "" {
+		buf.WriteString(" AND (item_info.title LIKE '%")
+		buf.WriteString(word)
+		buf.WriteString("%' OR item_info.short_title LIKE '%")
+		buf.WriteString(word)
+		buf.WriteString("%')")
+	}
+	buf.WriteString(where)
+	where = buf.String()
+
+	i.Connector.ExecScalar(fmt.Sprintf(`SELECT COUNT(0) FROM ws_item
+         INNER JOIN item_info ON item_info.id=ws_item.item_id
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE ws_item.review_state= $1
+		 AND ws_item.shelve_state= $2  %s`, where), &total,
+		enum.ReviewPass, item.ShelvesOn)
+	var list []*item.GoodsItem
+
+	if total > 0 {
+		sql = fmt.Sprintf(`SELECT item_info.id,item_info.product_id,item_info.prom_flag,
+		item_info.cat_id,item_info.vendor_id,item_info.brand_id,item_info.shop_id,
+		item_info.shop_cat_id,item_info.express_tid,item_info.title,
+		item_info.short_title,item_info.code,item_info.image,
+		item_info.is_present,ws_item.price_range,item_info.stock_num,
+		item_info.sale_num,item_info.sku_num,item_info.sku_id,item_info.cost,
+		ws_item.price,item_info.retail_price,item_info.weight,item_info.bulk,
+		item_info.shelve_state,item_info.review_state,item_info.review_remark,
+		item_info.sort_num,item_info.create_time,item_info.update_time
+		 FROM ws_item INNER JOIN item_info ON item_info.id=ws_item.item_id
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE ws_item.review_state= $1
+		 AND ws_item.shelve_state= $2 %s
+		 ORDER BY %s item_info.update_time DESC LIMIT $4 OFFSET $3`,
+			where, orderBy)
+		i.o.SelectByQuery(&list, sql,
+			enum.ReviewPass, item.ShelvesOn, start, end-start)
+	}
+	return total, list
+}
+
+//根据分类获取上架的商品
+func (i ItemQuery) GetOnShelvesItem(catIdArr []int, begin, end int,
+	where string) []*item.GoodsItem {
+	var list []*item.GoodsItem
+	if len(catIdArr) > 0 {
+		catIdStr := format.IntArrStrJoin(catIdArr)
+		sql := fmt.Sprintf(`SELECT * FROM item_info
+         INNER JOIN product ON product.id = item_info.product_id
+		 WHERE item_info.cat_id IN(%s) AND item_info.review_state= $1
+		 AND item_info.shelve_state= $2 %s
+		 ORDER BY item_info.update_time DESC LIMIT $4 OFFSET $3`, catIdStr, where)
+		i.o.SelectByQuery(&list, sql,
+			enum.ReviewPass, item.ShelvesOn, begin, end-begin)
+	}
+	return list
+}
+
+// 搜索随机的商品列表
+func (i ItemQuery) GetRandomItem(catIdArr []int, begin, end int, where string) []*item.GoodsItem {
+	/*
+	       随机查询： 要减去获取的条数，以确保至少有2条数据
+	   SELECT * FROM item_info
+
+	   JOIN (SELECT ROUND(RAND() * (
+	     SELECT MAX(id)-2 FROM item_info
+	        )) AS id) AS r2
+
+	        WHERE item_info.id > r2.id LIMIT 2
+
+	*/
+
+	s := []string{where}
+	if catIdArr != nil && len(catIdArr) > 0 {
+		catIdStr := format.IntArrStrJoin(catIdArr)
+		if where != "" {
+			s = append(s, " AND")
+		}
+		s = append(s, fmt.Sprintf("item_info.cat_id IN (%s)", catIdStr))
+	}
+	search := strings.Join(s, "")
+
+	var list []*item.GoodsItem
+	sql := fmt.Sprintf(`SELECT * FROM item_info
+    JOIN (SELECT ROUND(RAND() * (
+      SELECT MAX(id)-? FROM item_info WHERE  item_info.review_state= $1
+         AND item_info.shelve_state= ? %s
+         )) AS id) AS r2
+		 WHERE item_info.Id > r2.id
+		  AND item_info.review_state= ?
+		 AND item_info.shelve_state= ? %s LIMIT ? OFFSET $3`,
+		search, search)
+	i.o.SelectByQuery(&list, sql,
+		enum.ReviewPass, item.ShelvesOn,
+		enum.ReviewPass, item.ShelvesOn, begin, end-begin)
+	return list
+}
+
+//根据关键词搜索上架的商品
+func (i ItemQuery) GetPagedOnShelvesGoodsByKeyword(shopId int64, start, end int,
+	keyword, where, orderBy string) (int, []*valueobject.Goods) {
+	var sql string
+	total := 0
+	keyword = "%" + keyword + "%"
+	if len(where) != 0 {
+		where = " AND " + where
+	}
+	if len(orderBy) != 0 {
+		orderBy += ","
+	}
+
+	i.Connector.ExecScalar(fmt.Sprintf(`SELECT COUNT(0) FROM item_info
+         INNER JOIN product ON product.id = item_info.product_id
+		 INNER JOIN product_category ON product.cat_id=product_category.id
+		 WHERE product.review_state= $1 AND product.shelve_state= $2
+         AND ($3=0 OR product.supplier_id IN (SELECT vendor_id FROM mch_shop WHERE id= $4))
+         AND product.name LIKE $5 %s`, where), &total,
+		enum.ReviewPass, item.ShelvesOn, shopId, shopId, keyword)
+
+	var e []*valueobject.Goods
+	if total > 0 {
+		sql = fmt.Sprintf(`SELECT * FROM item_info INNER JOIN product ON product.id = item_info.product_id
+		 INNER JOIN product_category ON product.cat_id=product_category.id
+		 WHERE product.review_state= $1 AND product.shelve_state= $2
+         AND ($3=0 OR product.supplier_id IN (SELECT vendor_id FROM mch_shop WHERE id= $4))
+         AND product.name LIKE $5 %s ORDER BY %s update_time DESC LIMIT $7 OFFSET $6`,
+			where, orderBy)
+		i.o.SelectByQuery(&e, sql, enum.ReviewPass,
+			item.ShelvesOn, shopId, shopId, keyword, start, end-start)
+	}
+
+	return total, e
+}
